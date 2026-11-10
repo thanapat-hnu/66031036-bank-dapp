@@ -98,7 +98,16 @@
     // ===== แก้ข้อมูลตรงนี้ =====
     const STUDENT_ID = "66031036";
     const STUDENT_NAME = "ธนภัทร หนูบุญมี";
-    const CONTRACT_ADDRESS = "0x56343Bc6e6B1915B31191F23FA06322CB58f0132";
+    const CONTRACT_ADDRESS = "0xd48cd2cd47787243C1e564325aaf88330b03a51d"; // Hoodi
+
+    // Network: Ethereum Hoodi testnet
+    const HOODI = {
+      chainId: "0x88bb0", // 560048
+      chainName: "Ethereum Hoodi",
+      nativeCurrency: { name: "Hoodi ETH", symbol: "ETH", decimals: 18 },
+      rpcUrls: ["https://ethereum-hoodi-rpc.publicnode.com"],
+      blockExplorerUrls: ["https://hoodi.etherscan.io"]
+    };
 
     // ABI ของ Bank.sol
     const ABI = [
@@ -133,13 +142,14 @@
         return;
       }
       try {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        await ensureHoodi();
         provider = new ethers.BrowserProvider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
         signer = await provider.getSigner();
         const addr = await signer.getAddress();
         const net = await provider.getNetwork();
         $("account").textContent = "Account: " + addr;
-        $("network").textContent = "Network: " + net.name + " (chainId " + net.chainId + ")";
+        $("network").textContent = "Network: " + (net.chainId === 560048n ? "Ethereum Hoodi" : net.name) + " (chainId " + net.chainId + ")";
         $("btnConnect").textContent = "Connected ✓";
         $("btnContract").disabled = false;
         if ($("contractAddr").value.trim()) await connectContract();
@@ -148,12 +158,29 @@
       }
     }
 
+    async function ensureHoodi() {
+      const current = await window.ethereum.request({ method: "eth_chainId" });
+      if (current.toLowerCase() === HOODI.chainId) return;
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: HOODI.chainId }]
+        });
+      } catch (e) {
+        if (e.code === 4902 || e?.data?.originalError?.code === 4902) {
+          await window.ethereum.request({ method: "wallet_addEthereumChain", params: [HOODI] });
+        } else {
+          throw e;
+        }
+      }
+    }
+
     async function connectContract() {
       const addr = $("contractAddr").value.trim();
       if (!ethers.isAddress(addr)) { $("contractInfo").textContent = "Address ไม่ถูกต้อง"; return; }
       const code = await provider.getCode(addr);
       if (code === "0x") {
-        $("contractInfo").textContent = "ไม่พบ contract ที่ address นี้บน network ปัจจุบัน";
+        $("contractInfo").textContent = "ไม่พบ contract ที่ address นี้บน Hoodi";
         return;
       }
       contract = new ethers.Contract(addr, ABI, signer);
